@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل الحضور والانصراف</title>
+    <style>
+        body {
+            font-family: Tahoma, sans-serif;
+            background-color: #f4f7f6;
+            text-align: center;
+            padding: 50px 20px;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+            max-width: 400px;
+            margin: auto;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #message {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>تسجيل الحضور والانصراف</h2>
+    <input type="text" id="employeeName" placeholder="اكتب اسمك الثلاثي" required>
+    
+    <select id="actionType">
+        <option value="حضور">تسجيل حضور</option>
+        <option value="انصراف">تسجيل انصراف</option>
+    </select>
+    
+    <button onclick="registerAttendance()">إرسال بصمة الموقع</button>
+    <p id="message"></p>
+</div>
+
+<script>
+    // ⚠️ حط هنا إحداثيات الشركة الحقيقية (خط العرض وخط الطول)
+    const COMPANY_LAT = 30.030138; // غيرها بإحداثيات شركتك
+    const COMPANY_LON = 31.112698; // غيرها بإحداثيات شركتك
+    const ALLOWED_DISTANCE = 0.1; // المسافة المسموحة بالكيلومتر (هنا 100 متر)
+    
+    // ⚠️ حط هنا رابط الـ Web App اللي خدته من Google Apps Script بين علامتي التنصيص
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby2WbZ_4Y2gl0aRdZv-g_xq9GZo46diGjEdthNulIxyGuCEiwV1EX7uTE2m4GiiEHTvoQ/exec";
+
+    function registerAttendance() {
+        const name = document.getElementById('employeeName').value.trim();
+        const action = document.getElementById('actionType').value;
+        const msg = document.getElementById('message');
+
+        if (!name) {
+            alert("من فضلك اكتب اسمك أولاً!");
+            return;
+        }
+
+        if (!navigator.geolocation) {
+            alert("متصفحك لا يدعم تحديد الموقع الجغرافي (GPS)");
+            return;
+        }
+
+        msg.style.color = "blue";
+        msg.innerText = "جاري تحديد موقعك الجغرافي...";
+
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                const userLat = position.coords.latitude;
+                const userLon = position.coords.longitude;
+
+                // حساب المسافة بين الموظف والشركة
+                const distance = calculateDistance(userLat, userLon, COMPANY_LAT, COMPANY_LON);
+
+                if (distance <= ALLOWED_DISTANCE) {
+                    msg.style.color = "green";
+                    msg.innerText = "جاري تسجيل الحركة...";
+                    sendDataToSheet(name, action, "داخل النطاق (مقبول)");
+                } else {
+                    msg.style.color = "red";
+                    msg.innerText = "عذراً، أنت خارج نطاق الشركة الجغرافي! المسافة الحالية تقارب " + (distance * 1000).toFixed(0) + " متر.";
+                }
+            },
+            function(error) {
+                msg.style.color = "red";
+                alert("فشل في تحديد الموقع. تأكد من تفعيل الـ GPS وصلاحية الموقع للمتصفح.");
+                msg.innerText = "";
+            },
+            { enableHighAccuracy: true }
+        );
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        let R = 6371; // نصف قطر الأرض بـ KM
+        let dLat = (lat2 - lat1) * (Math.PI / 180);
+        let dLon = (lon2 - lon1) * (Math.PI / 180);
+        let a = 
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    function sendDataToSheet(name, action, status) {
+        const data = {
+            name: name,
+            action: action,
+            status: status
+        };
+
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        }).then(() => {
+            msg.style.color = "green";
+            msg.innerText = "تم تسجيل " + action + " بنجاح!";
+            document.getElementById('employeeName').value = "";
+        }).catch(err => {
+            msg.style.color = "red";
+            msg.innerText = "حدث خطأ أثناء الاتصال بالسيرفر.";
+        });
+    }
+</script>
+
+</body>
+</html>
